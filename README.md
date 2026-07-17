@@ -1,4 +1,4 @@
-# Employee Management System by Akhilesh
+# Employee Management System by Akhilesh Pathe
 
 ## Tech Stack
 
