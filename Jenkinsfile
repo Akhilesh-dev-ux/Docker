@@ -2,18 +2,16 @@ pipeline {
     agent any
 
     environment {
-        AWS_REGION = "ap-south-1"
-        AWS_ACCOUNT_ID = "638175140757"
-
-        IMAGE_NAME = "employee-backend"
-        IMAGE_TAG = "latest"
-
-        ECR_REPO = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${IMAGE_NAME}"
+        AWS_REGION = 'ap-south-1'
+        AWS_ACCOUNT_ID = '638175140757'
+        ECR_REPOSITORY = 'employee-backend'
+        IMAGE_TAG = 'latest'
+        IMAGE_URI = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPOSITORY}:${IMAGE_TAG}"
     }
 
     stages {
 
-        stage('Checkout') {
+        stage('Checkout Code') {
             steps {
                 checkout scm
             }
@@ -29,26 +27,24 @@ pipeline {
 
         stage('Build Docker Image') {
             steps {
-                sh 'docker build -t ${IMAGE_NAME}:${IMAGE_TAG} ./backend'
+                sh 'docker build -t employee-backend:latest ./backend'
             }
         }
 
         stage('Login to Amazon ECR') {
             steps {
                 sh '''
-                aws ecr get-login-password --region ${AWS_REGION} \
-                | docker login \
-                --username AWS \
-                --password-stdin ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com
+                aws ecr get-login-password --region $AWS_REGION | \
+                docker login --username AWS --password-stdin \
+                $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com
                 '''
             }
         }
 
-        stage('Tag Image') {
+        stage('Tag Docker Image') {
             steps {
                 sh '''
-                docker tag ${IMAGE_NAME}:${IMAGE_TAG} \
-                ${ECR_REPO}:${IMAGE_TAG}
+                docker tag employee-backend:latest $IMAGE_URI
                 '''
             }
         }
@@ -56,19 +52,40 @@ pipeline {
         stage('Push Image to ECR') {
             steps {
                 sh '''
-                docker push ${ECR_REPO}:${IMAGE_TAG}
+                docker push $IMAGE_URI
                 '''
+            }
+        }
+
+        stage('Deploy Container') {
+            steps {
+                sh '''
+                docker stop backend-app || true
+                docker rm backend-app || true
+
+                docker run -d \
+                  --name backend-app \
+                  -p 5000:5000 \
+                  $IMAGE_URI
+                '''
+            }
+        }
+
+        stage('Verify Deployment') {
+            steps {
+                sh 'docker ps'
+                sh 'docker images'
             }
         }
     }
 
     post {
         success {
-            echo "Docker image pushed to Amazon ECR successfully."
+            echo 'Pipeline completed successfully.'
         }
 
         failure {
-            echo "Pipeline failed."
+            echo 'Pipeline failed.'
         }
     }
 }
