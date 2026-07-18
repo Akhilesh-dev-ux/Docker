@@ -1,5 +1,7 @@
 node_modules/
+aws/
+awscliv2.zip
+
 .env
-.git
-.vscode
-npm-debug.log
+
+*.log
