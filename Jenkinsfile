@@ -2,7 +2,13 @@ pipeline {
     agent any
 
     environment {
-        IMAGE_NAME = "employee-backend:v1"
+        AWS_REGION = "ap-south-1"
+        AWS_ACCOUNT_ID = "638175140757"
+
+        IMAGE_NAME = "employee-backend"
+        IMAGE_TAG = "latest"
+
+        ECR_REPO = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${IMAGE_NAME}"
     }
 
     stages {
@@ -23,32 +29,46 @@ pipeline {
 
         stage('Build Docker Image') {
             steps {
-                sh 'docker compose build'
+                sh 'docker build -t ${IMAGE_NAME}:${IMAGE_TAG} ./backend'
             }
         }
 
-        stage('Deploy Containers') {
+        stage('Login to Amazon ECR') {
             steps {
-                sh 'docker compose down || true'
-                sh 'docker compose up -d'
+                sh '''
+                aws ecr get-login-password --region ${AWS_REGION} \
+                | docker login \
+                --username AWS \
+                --password-stdin ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com
+                '''
             }
         }
 
-        stage('Verify Deployment') {
+        stage('Tag Image') {
             steps {
-                sh 'docker ps'
-                sh 'docker logs backend-app --tail 10'
+                sh '''
+                docker tag ${IMAGE_NAME}:${IMAGE_TAG} \
+                ${ECR_REPO}:${IMAGE_TAG}
+                '''
+            }
+        }
+
+        stage('Push Image to ECR') {
+            steps {
+                sh '''
+                docker push ${ECR_REPO}:${IMAGE_TAG}
+                '''
             }
         }
     }
 
     post {
         success {
-            echo 'Deployment Successful'
+            echo "Docker image pushed to Amazon ECR successfully."
         }
 
         failure {
-            echo 'Deployment Failed'
+            echo "Pipeline failed."
         }
     }
 }
